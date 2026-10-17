@@ -3,39 +3,69 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
-const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// Ganti dengan ID pesan video milikmu di channel Telegram.
-// message_id adalah nomor pesan, bukan file_id.
+// Ganti message_id dengan nomor pesan video yang benar di channel.
 const MOVIES = [
   {
-    title: "Colmek Nikmat",
-    genre: "Asupan",
+    title: "Cewek Cantik Colmek",
+    genre: "Colmek",
     message_id: 3
-  },
-  {
-    title: "Contoh Film 2",
-    genre: "Comedy",
-    message_id: 11
-  },
-  {
-    title: "Contoh Film 3",
-    genre: "Drama",
-    message_id: 12
   }
 ];
 
 async function telegram(method, data) {
-  const response = await fetch(`${API}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
+  if (!BOT_TOKEN) {
+    throw new Error("BOT_TOKEN belum diatur di Vercel");
+  }
 
-  const result = await response.json();
+  let response;
 
-  if (!result.ok) {
-    throw new Error(result.description || "Telegram API error");
+  try {
+    response = await fetch(`${TELEGRAM_API}/${method}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (error) {
+    console.error("Telegram network error:", {
+      method,
+      name: error.name,
+      message: error.message,
+      cause: error.cause?.message,
+      code: error.cause?.code
+    });
+
+    throw new Error(
+      `Koneksi Telegram gagal (${method}): ${
+        error.cause?.code || error.message
+      }`
+    );
+  }
+
+  let result;
+
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(`Respons Telegram bukan JSON (${method})`);
+  }
+
+  if (!response.ok || !result.ok) {
+    console.error("Telegram API error:", {
+      method,
+      status: response.status,
+      description: result.description
+    });
+
+    throw new Error(
+      `Telegram API ${method}: ${
+        result.description || response.status
+      }`
+    );
   }
 
   return result;
@@ -54,22 +84,25 @@ export default async function handler(req, res) {
     return res.status(200).send("Telegram Film Bot aktif");
   }
 
-  // Verifikasi permintaan webhook dari Telegram.
+  // Verifikasi secret token dari webhook Telegram.
   if (
+    !WEBHOOK_SECRET ||
     req.headers["x-telegram-bot-api-secret-token"] !==
-    WEBHOOK_SECRET
+      WEBHOOK_SECRET
   ) {
     return res.status(403).send("Forbidden");
   }
 
-  // Balas Telegram dengan cepat agar webhook tidak timeout.
-  res.status(200).json({ ok: true });
+  const update = req.body;
+  const message = update?.message;
+  const callback = update?.callback_query;
+
+  // Abaikan update yang tidak digunakan bot ini.
+  if (!message && !callback) {
+    return res.status(200).json({ ok: true });
+  }
 
   try {
-    const update = req.body;
-    const message = update.message;
-    const callback = update.callback_query;
-
     if (message) {
       const chatId = message.chat.id;
       const text = (message.text || "").trim();
@@ -79,17 +112,19 @@ export default async function handler(req, res) {
           chatId,
           "🎬 KATALOG FILM\n\nPilih menu untuk melihat daftar video.",
           {
-            inline_keyboard: [[
-              {
-                text: "🎞️ Lihat Katalog Film",
-                callback_data: "catalog"
-              }
-            ]]
+            inline_keyboard: [
+              [
+                {
+                  text: "🎞️ Lihat Katalog Film",
+                  callback_data: "catalog"
+                }
+              ]
+            ]
           }
         );
       }
 
-      return;
+      return res.status(200).json({ ok: true });
     }
 
     if (callback) {
@@ -101,18 +136,24 @@ export default async function handler(req, res) {
       });
 
       if (data === "catalog") {
-        const buttons = MOVIES.map((movie, index) => [{
-          text: `${movie.title} · ${movie.genre}`,
-          callback_data: `movie:${index}`
-        }]);
+        const buttons = MOVIES.map((movie, index) => [
+          {
+            text: `${movie.title} · ${movie.genre}`,
+            callback_data: `movie:${index}`
+          }
+        ]);
 
-        await sendMessage(
-          chatId,
-          "🍿 PILIH VIDEO YANG INGIN DITONTON:",
-          { inline_keyboard: buttons }
-        );
+        if (buttons.length === 0) {
+          await sendMessage(chatId, "Katalog video masih kosong.");
+        } else {
+          await sendMessage(
+            chatId,
+            "🍿 PILIH VIDEO YANG INGIN DITONTON:",
+            { inline_keyboard: buttons }
+          );
+        }
 
-        return;
+        return res.status(200).json({ ok: true });
       }
 
       if (data.startsWith("movie:")) {
@@ -124,23 +165,38 @@ export default async function handler(req, res) {
           index >= MOVIES.length
         ) {
           await sendMessage(chatId, "Video tidak ditemukan.");
-          return;
+          return res.status(200).json({ ok: true });
+        }
+
+        if (!CHANNEL_ID) {
+          throw new Error("CHANNEL_ID belum diatur di Vercel");
         }
 
         const movie = MOVIES[index];
 
-        // Menyalin video langsung dari channel Telegram.
         await telegram("copyMessage", {
           chat_id: chatId,
           from_chat_id: CHANNEL_ID,
           message_id: movie.message_id
         });
 
-        return;
+        return res.status(200).json({ ok: true });
       }
     }
+
+    return res.status(200).json({ ok: true });
   } catch (error) {
-    // Jangan mencatat token bot atau informasi rahasia.
-    console.error("Bot processing error:", error.message);
+    console.error("Bot processing error:", {
+      message: error.message,
+      cause: error.cause?.message,
+      stack: error.stack
+    });
+
+    // Berikan error HTTP agar Telegram dapat mencoba kembali
+    // memproses update ini.
+    return res.status(500).json({
+      ok: false,
+      error: "Bot processing failed"
+    });
   }
 }

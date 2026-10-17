@@ -10,26 +10,32 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const MOVIES = [
   {
     title: "Cewek Pramuka Colmek",
+    genre: "Colmek",
     message_id: 5
   },
   {
     title: "Main di Mobil Sama Ayang",
+    genre: "Main",
     message_id: 6
   },
   {
     title: "Ngemot Punya Ayang di Kelas",
+    genre: "Main",
     message_id: 7
   },
   {
     title: "Cewek Hijab Mulus Colmek",
+    genre: "Colmek",
     message_id: 8
   },
   {
     title: "Main Sama Adik",
+    genre: "Main",
     message_id: 9
   },
  {
     title: "Anak SD Colmek",
+    genre: "Colmek",
     message_id: 10
   }
 
@@ -133,12 +139,12 @@ export default async function handler(req, res) {
       if (text === "/start") {
         await sendMessage(
           chatId,
-          "🎬 KATALOG FILM\n\nPilih menu untuk melihat daftar video.",
+          "🎬 DAFTAR VIDEO HOT\n\nPilih menu untuk melihat daftar video.",
           {
             inline_keyboard: [
               [
                 {
-                  text: "🎞️ Lihat Katalog Film",
+                  text: "🎞️ Lihat Daftar Video",
                   callback_data: "catalog"
                 }
               ]
@@ -167,11 +173,11 @@ export default async function handler(req, res) {
         ]);
 
         if (buttons.length === 0) {
-          await sendMessage(chatId, "Katalog video masih kosong.");
+          await sendMessage(chatId, "Video masih kosong.");
         } else {
           await sendMessage(
             chatId,
-            "🍿 PILIH VIDEO YANG INGIN DITONTON:",
+            "💦 PILIH VIDEO YANG INGIN DITONTON:",
             { inline_keyboard: buttons }
           );
         }

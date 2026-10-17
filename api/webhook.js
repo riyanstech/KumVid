@@ -9,9 +9,9 @@ const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 // message_id adalah nomor pesan, bukan file_id.
 const MOVIES = [
   {
-    title: "Contoh Film 1",
-    genre: "Action",
-    message_id: 10
+    title: "Colmek Nikmat",
+    genre: "Asupan",
+    message_id: 3
   },
   {
     title: "Contoh Film 2",

@@ -1,12 +1,13 @@
 
-
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// Ganti message_id dengan nomor pesan video yang benar di channel.
+const ADMIN_URL = "https://t.me/NaisaAfni";
+
+// Daftar video berdasarkan message_id di channel Telegram.
 const MOVIES = [
   {
     title: "Cewek Pramuka Colmek",
@@ -33,14 +34,11 @@ const MOVIES = [
     genre: "Main",
     message_id: 9
   },
- {
+  {
     title: "Anak SD Colmek",
     genre: "Colmek",
     message_id: 10
   }
-
-
-
 ];
 
 async function telegram(method, data) {
@@ -62,14 +60,12 @@ async function telegram(method, data) {
   } catch (error) {
     console.error("Telegram network error:", {
       method,
-      name: error.name,
       message: error.message,
-      cause: error.cause?.message,
       code: error.cause?.code
     });
 
     throw new Error(
-      `Koneksi Telegram gagal (${method}): ${
+      `Koneksi Telegram gagal: ${
         error.cause?.code || error.message
       }`
     );
@@ -80,7 +76,7 @@ async function telegram(method, data) {
   try {
     result = await response.json();
   } catch {
-    throw new Error(`Respons Telegram bukan JSON (${method})`);
+    throw new Error(`Respons Telegram bukan JSON: ${method}`);
   }
 
   if (!response.ok || !result.ok) {
@@ -104,16 +100,19 @@ async function sendMessage(chatId, text, replyMarkup) {
   return telegram("sendMessage", {
     chat_id: chatId,
     text,
-    ...(replyMarkup ? { reply_markup: replyMarkup } : {})
+    ...(replyMarkup
+      ? { reply_markup: replyMarkup }
+      : {})
   });
 }
 
 export default async function handler(req, res) {
+  // Tes endpoint melalui browser.
   if (req.method !== "POST") {
-    return res.status(200).send("Telegram Film Bot aktif");
+    return res.status(200).send("KUMVID Telegram Bot aktif");
   }
 
-  // Verifikasi secret token dari webhook Telegram.
+  // Memeriksa secret token webhook Telegram.
   if (
     !WEBHOOK_SECRET ||
     req.headers["x-telegram-bot-api-secret-token"] !==
@@ -126,26 +125,41 @@ export default async function handler(req, res) {
   const message = update?.message;
   const callback = update?.callback_query;
 
-  // Abaikan update yang tidak digunakan bot ini.
   if (!message && !callback) {
     return res.status(200).json({ ok: true });
   }
 
   try {
+    // =========================
+    // PERINTAH /START
+    // =========================
     if (message) {
       const chatId = message.chat.id;
       const text = (message.text || "").trim();
 
-      if (text === "/start") {
+      if (text === "/start" || text.startsWith("/start ")) {
         await sendMessage(
           chatId,
-          "🎬 DAFTAR VIDEO HOT\n\nPilih menu untuk melihat daftar video.",
+          "🎬 KUMVID — KUMPULAN VIDEO\n\n" +
+            "Selamat datang di KUMVID!\n\n" +
+            "Pilih menu di bawah untuk melihat daftar video " +
+            "atau mendapatkan akses VIP.\n\n" +
+            "👑 VIP ACCESS\n" +
+            "Harga: Rp2.000\n" +
+            "Hubungi admin untuk informasi pembayaran " +
+            "dan akses channel VIP.",
           {
             inline_keyboard: [
               [
                 {
                   text: "🎞️ Lihat Daftar Video",
                   callback_data: "catalog"
+                }
+              ],
+              [
+                {
+                  text: "👑 JOIN CHANNEL VIP — Rp2.000",
+                  url: ADMIN_URL
                 }
               ]
             ]
@@ -156,6 +170,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // =========================
+    // TOMBOL INLINE
+    // =========================
     if (callback) {
       const chatId = callback.message.chat.id;
       const data = callback.data;
@@ -164,6 +181,7 @@ export default async function handler(req, res) {
         callback_query_id: callback.id
       });
 
+      // MENU KATALOG VIDEO
       if (data === "catalog") {
         const buttons = MOVIES.map((movie, index) => [
           {
@@ -172,19 +190,28 @@ export default async function handler(req, res) {
           }
         ]);
 
-        if (buttons.length === 0) {
-          await sendMessage(chatId, "Video masih kosong.");
-        } else {
-          await sendMessage(
-            chatId,
-            "💦 PILIH VIDEO YANG INGIN DITONTON:",
-            { inline_keyboard: buttons }
-          );
-        }
+        buttons.push([
+          {
+            text: "👑 JOIN CHANNEL VIP — Rp2.000",
+            url: ADMIN_URL
+          }
+        ]);
+
+        await sendMessage(
+          chatId,
+          "🎞️ DAFTAR VIDEO KUMVID\n\n" +
+            "Silakan pilih video yang tersedia.\n\n" +
+            "Ingin mendapatkan akses channel VIP?\n" +
+            "Tekan tombol VIP di bawah.",
+          {
+            inline_keyboard: buttons
+          }
+        );
 
         return res.status(200).json({ ok: true });
       }
 
+      // KIRIM VIDEO DARI CHANNEL
       if (data.startsWith("movie:")) {
         const index = Number(data.slice(6));
 
@@ -193,7 +220,11 @@ export default async function handler(req, res) {
           index < 0 ||
           index >= MOVIES.length
         ) {
-          await sendMessage(chatId, "Video tidak ditemukan.");
+          await sendMessage(
+            chatId,
+            "Video tidak ditemukan. Silakan buka katalog lagi."
+          );
+
           return res.status(200).json({ ok: true });
         }
 
@@ -217,12 +248,9 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Bot processing error:", {
       message: error.message,
-      cause: error.cause?.message,
-      stack: error.stack
+      cause: error.cause?.message
     });
 
-    // Berikan error HTTP agar Telegram dapat mencoba kembali
-    // memproses update ini.
     return res.status(500).json({
       ok: false,
       error: "Bot processing failed"

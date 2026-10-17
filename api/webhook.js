@@ -1,4 +1,5 @@
 
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
@@ -8,10 +9,32 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 // Ganti message_id dengan nomor pesan video yang benar di channel.
 const MOVIES = [
   {
-    title: "Cewek Cantik Colmek",
-    genre: "Colmek",
-    message_id: 3
+    title: "Cewek Pramuka Colmek",
+    message_id: 5
+  },
+  {
+    title: "Main di Mobil Sama Ayang",
+    message_id: 6
+  },
+  {
+    title: "Ngemot Punya Ayang di Kelas",
+    message_id: 7
+  },
+  {
+    title: "Cewek Hijab Mulus Colmek",
+    message_id: 8
+  },
+  {
+    title: "Main Sama Adik",
+    message_id: 9
+  },
+ {
+    title: "Anak SD Colmek",
+    message_id: 10
   }
+
+
+
 ];
 
 async function telegram(method, data) {
